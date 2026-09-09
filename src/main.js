@@ -55,6 +55,62 @@
     });
   });
 
+  // Animate internal navigation consistently, including the mobile menu.
+  var scrollFrame = null;
+
+  function cancelNavigationScroll() {
+    if (scrollFrame !== null) {
+      cancelAnimationFrame(scrollFrame);
+      scrollFrame = null;
+    }
+  }
+
+  document.querySelectorAll('a[href^="#"]').forEach(function (link) {
+    link.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey ||
+          event.metaKey || event.shiftKey || event.altKey) return;
+
+      var hash = link.getAttribute('href');
+      var target = document.getElementById(hash.slice(1));
+      if (!target) return;
+
+      event.preventDefault();
+      closeMenu();
+      cancelNavigationScroll();
+
+      var start = window.scrollY;
+      var top = target.getBoundingClientRect().top + start - header.offsetHeight;
+      var limit = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      var destination = Math.max(0, Math.min(top, limit));
+      if (window.location.hash !== hash) history.pushState(null, '', hash);
+
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        window.scrollTo({ top: destination, behavior: 'instant' });
+        return;
+      }
+
+      var startedAt = performance.now();
+      function animate(now) {
+        var progress = Math.min((now - startedAt) / 1000, 1);
+        var eased = progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        window.scrollTo({ top: start + (destination - start) * eased, behavior: 'instant' });
+        scrollFrame = progress < 1 ? requestAnimationFrame(animate) : null;
+      }
+      scrollFrame = requestAnimationFrame(animate);
+    });
+  });
+
+  window.addEventListener('wheel', cancelNavigationScroll, { passive: true });
+  window.addEventListener('touchstart', cancelNavigationScroll, { passive: true });
+  window.addEventListener('popstate', cancelNavigationScroll);
+  window.addEventListener('keydown', function (event) {
+    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Escape'].indexOf(event.key) !== -1) {
+      cancelNavigationScroll();
+    }
+  });
+
   window.addEventListener('resize', function () {
     if (window.innerWidth > 768 && nav.classList.contains('open')) {
       closeMenu();
